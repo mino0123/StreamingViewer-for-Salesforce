@@ -1,0 +1,131 @@
+<apex:page controller="StreamingViewer">
+    <apex:includeScript value="{!$Resource.cometd}"/>
+    <apex:includeScript value="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"/>
+    <apex:includeScript value="{!$Resource.jquery_cometd}"/>
+    <apex:includeScript value="{!$Resource.Hogan}"/>
+    <apex:includeScript value="{!$Resource.StreamingViewerJS}"/>
+    <apex:stylesheet value="{!$Resource.StreamingViewerCSS}"/>
+    <script type="text/javascript">
+        jQuery.noConflict();
+        var MessageRenderer = null;
+	    jQuery(document).ready(function() {
+	        jQuery.cometd.init({
+	           url: window.location.protocol+'//'+window.location.hostname+'/cometd/24.0/',
+	           requestHeaders: { Authorization: 'OAuth {!$Api.Session_ID}'}
+	        });
+	        TopicSubscription.init();
+	        MessageRenderer = Hogan.compile(jQuery('#messageTemplate').html());
+            jQuery('.label-delete').val(LC.labels.Buttons.delete);
+            jQuery('.label-save').val(LC.labels.Buttons.save);
+	        jQuery('.label-action').text(LC.labels.Global.action);
+	    });
+	    TopicSubscription.notifier = function(message) {
+            var fields = [];
+            var sobject = message.data.sobject;
+            for (var f in sobject) {
+                fields.push({
+                    name: f,
+                    value: sobject[f]
+                });
+            }
+            var obj = {
+                channel: message.channel,
+                event: {
+                    type: message.data.event.type,
+                    createdDate: DateUtil.formatDate(new Date(message.data.event.createdDate), 'yyyy/MM/dd HH:mm')
+                },
+                fields: fields
+            };
+            jQuery('#content').append(MessageRenderer.render(obj));
+            jQuery('.notifications').css('display', 'block');
+	    }
+    </script>
+    <script type="text/x-template" id="messageTemplate">
+        <table class="list" cellspacing="0" cellpadding="0" border="0">
+            <tr class="headerRow">
+                <th>Channel</th>
+                <th>Event type</th>
+                <th>Created</th>
+                {{#fields}}<th>{{name}}</th>{{/fields}}
+            </tr>
+            <tr>
+                <td>{{channel}}</td>
+                <td>{{event.type}}</td>
+                <td>{{event.createdDate}}</td>
+                {{#fields}}<td>{{value}}</td>{{/fields}}
+            </tr>
+        </table>
+    </script>
+    <body>
+    <apex:pageMessages />
+    <apex:pageBlock title="{!$ObjectType.PushTopic.labelPlural}">
+        <apex:form id="listForm" rendered="{!topics.size > 0}">
+            <apex:pageBlockTable value="{!topics}" var="t">
+                <apex:column styleClass="cell-action">
+                    <apex:facet name="header">
+                        <span class="label-action"></span>
+                    </apex:facet>
+                    <apex:commandButton action="{!deleteTopic}" reRender="listForm" styleClass="label-delete"
+                                        onclick="TopicSubscription.clear();" oncomplete="TopicSubscription.init();">
+                        <apex:param value="{!t.Id}" name="id"/>
+                    </apex:commandButton>
+                </apex:column>
+                <apex:column styleClass="cell-subscribe">
+                    <apex:facet name="header">
+                        <input type="checkbox" id="subscribeAll" onclick="TopicSubscription.forAll(this.checked);" />
+                    </apex:facet>
+                    <apex:inputCheckbox id="subscribe" />
+                    <script>
+                        TopicSubscription.topics.push({
+                            name:'{!JSENCODE(t.Name)}', 
+                            query:'{!JSENCODE(t.Query)}', 
+                            checkbox:document.getElementById('{!$Component.subscribe}')
+                        });
+                    </script>
+                </apex:column>
+                <apex:column value="{!t.Name}" styleClass="cell-name"/>
+                <apex:column value="{!t.Query}" styleClass="cell-query"/>
+                <apex:column value="{!t.ApiVersion}" styleClass="cell-api"/>
+                <apex:column value="{!t.NotifyForOperations}" styleClass="cell-no"/>
+                <apex:column value="{!t.NotifyForFields}" styleClass="cell-nf"/>
+                <apex:column value="{!t.Description}" styleClass="cell-desc"/>
+            </apex:pageBlockTable>
+        </apex:form>
+        <apex:form >
+            <table class="list" cellspacing="0" cellpadding="0" border="0">
+                <tr class="headerRow">
+                    <th class="label-action"></th>
+                    <th>{!$ObjectType.PushTopic.fields.Name.label}</th>
+                    <th>{!$ObjectType.PushTopic.fields.Query.label}</th>
+                    <th>{!$ObjectType.PushTopic.fields.ApiVersion.label}</th>
+                    <th>{!$ObjectType.PushTopic.fields.NotifyForOperations.label}</th>
+                    <th>{!$ObjectType.PushTopic.fields.NotifyForFields.label}</th>
+                    <th>{!$ObjectType.PushTopic.fields.Description.label}</th>
+                </tr>
+                <tr>
+                    <td class="cell-action"><apex:commandButton styleClass="label-save" action="{!saveTopic}" /></td>
+                    <td class="cell-name"><apex:inputField value="{!editTopic.Name}" /></td>
+                    <td class="cell-query"><apex:inputField value="{!editTopic.Query}" /></td>
+                    <td class="cell-api"><apex:inputField value="{!editTopic.ApiVersion}" /></td>
+                    <td class="cell-no">
+                        <apex:selectList value="{!editTopic.NotifyForOperations}" size="1">
+                            <apex:selectOptions value="{!operationsOptions}" />
+                        </apex:selectList>
+                    </td>
+                    <td class="cell-nf">
+                        <apex:selectList value="{!editTopic.NotifyForFields}" size="1">
+                            <apex:selectOptions value="{!fieldsOptions}" />
+                        </apex:selectList>
+                    </td>
+                    <td class="cell-desc"><apex:inputField value="{!editTopic.Description}" /></td>
+                </tr>
+            </table>
+        </apex:form>
+    </apex:pageBlock>
+    <div class="notifications">
+	    <apex:pageBlock >
+	        <div id="content"></div>
+	    </apex:pageBlock>
+    </div>
+    </body>
+</apex:page>
